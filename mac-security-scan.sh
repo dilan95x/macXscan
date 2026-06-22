@@ -219,8 +219,9 @@ fi
 # ── 8. SSH ────────────────────────────────────────────────────────────────────
 echo "[8/10] SSH access..."
 
+# Detect sshd without admin — if it's listening on TCP 22 then Remote Login is on
 SSH_LOGIN_ENABLED=false
-if systemsetup -getremotelogin 2>/dev/null | grep -q "On"; then
+if lsof -iTCP:22 -sTCP:LISTEN -nP 2>/dev/null | grep -q sshd; then
   SSH_LOGIN_ENABLED=true
 fi
 
@@ -233,12 +234,19 @@ if [[ -f "$HOME/.ssh/authorized_keys" ]] && [[ -s "$HOME/.ssh/authorized_keys" ]
       "x-apple.systempreferences:com.apple.preferences.sharing"
   else
     add_finding "low" "SSH keys are stored but Remote Login is off (${KEY_COUNT} key(s))" \
-      "Your Mac has saved SSH keys but Remote Login is disabled, so they cannot currently be used to access your Mac. Review them to make sure they are still needed." \
+      "Your Mac has saved SSH keys but Remote Login is currently disabled, so they cannot be used to access your Mac right now. Review them to make sure they are still needed." \
       "Review keys: cat ~/.ssh/authorized_keys — remove any you don't recognise"
   fi
 else
-  add_finding "ok" "No SSH keys stored" \
-    "Your Mac has no saved SSH keys and cannot be accessed remotely via key authentication."
+  if [[ "$SSH_LOGIN_ENABLED" == "true" ]]; then
+    add_finding "medium" "Remote Login (SSH) is enabled but no keys are stored" \
+      "Your Mac accepts SSH connections but only via password. Consider disabling Remote Login if you don't use it." \
+      "" \
+      "x-apple.systempreferences:com.apple.preferences.sharing"
+  else
+    add_finding "ok" "Remote Login is off and no SSH keys stored" \
+      "Your Mac cannot be accessed remotely via SSH."
+  fi
 fi
 
 if [[ -d "$HOME/.ssh" ]]; then
