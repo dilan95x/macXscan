@@ -23,6 +23,13 @@ chmod +x "$SCAN_SCRIPT"
 [[ -f "$SCRIPT_DIR/macXscan.command" ]] && chmod +x "$SCRIPT_DIR/macXscan.command"
 echo "✓ Installed to ~/Library/Application Support/macXscan/"
 
+# ── Step 2: Remove Gatekeeper quarantine ─────────────────────────────────────
+# Files downloaded from the internet are quarantined by macOS and blocked from running.
+xattr -d com.apple.quarantine "$SCAN_SCRIPT" 2>/dev/null || true
+xattr -d com.apple.quarantine "$SCRIPT_DIR/macXscan.command" 2>/dev/null || true
+xattr -d com.apple.quarantine "$SCRIPT_DIR/install.sh" 2>/dev/null || true
+echo "✓ Gatekeeper quarantine cleared"
+
 # ── Step 2: pip-audit ─────────────────────────────────────────────────────────
 if ! command -v pip-audit &>/dev/null; then
   echo ""
