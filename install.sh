@@ -43,7 +43,7 @@ echo ""
 if [[ -f "$AGENT_PLIST" ]]; then
   echo "✓ Weekly auto-scan already configured"
 else
-  echo "macXscan can run automatically every Monday at 9am and show a notification if issues are found."
+  echo "macXscan can run automatically every Monday at 9am and open the report in your browser."
   printf "  Set up weekly auto-scan? [y/N] "
   read -r answer
   if [[ "$answer" =~ ^[Yy]$ ]]; then

@@ -219,9 +219,12 @@ fi
 # ── 8. SSH ────────────────────────────────────────────────────────────────────
 echo "[8/10] SSH access..."
 
-# Detect sshd without admin — if it's listening on TCP 22 then Remote Login is on
+# Detect Remote Login without admin privileges.
+# macOS uses launchd socket activation: launchd holds port 22 and spawns sshd on demand,
+# so sshd itself is never listed as the listener on an idle Mac.
+# Checking for ANY listener on port 22 (regardless of process name) is reliable.
 SSH_LOGIN_ENABLED=false
-if lsof -iTCP:22 -sTCP:LISTEN -nP 2>/dev/null | grep -q sshd; then
+if lsof -iTCP:22 -sTCP:LISTEN -nP 2>/dev/null | grep -qv "^COMMAND"; then
   SSH_LOGIN_ENABLED=true
 fi
 
