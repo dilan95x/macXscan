@@ -4,16 +4,23 @@ A one-click Mac security scanner. Checks your system for common security issues 
 
 ## Quick start
 
-**Option A — Double-click (easiest)**
-Download the repo, then double-click `macXscan.command` in Finder.
-
-**Option B — Run the installer**
+**Option A — Run the installer (recommended)**
 ```bash
 bash install.sh
 ```
-The installer sets up permissions, optionally installs the Python CVE scanner, and optionally sets up a weekly auto-scan.
+Handles everything: permissions, Gatekeeper quarantine, optional pip-audit, optional weekly auto-scan.
 
-**Option C — Terminal**
+**Option B — Double-click in Finder**
+Run the installer first (Option A), then double-click `macXscan.command` in Finder any time.
+
+> **Getting a "can't be verified" error?**
+> macOS blocks scripts downloaded from the internet. Run the installer once to fix it, or clear it manually:
+> ```bash
+> xattr -d com.apple.quarantine macXscan.command
+> ```
+> Alternatively: right-click `macXscan.command` → **Open** → **Open** to bypass Gatekeeper once.
+
+**Option C — Terminal only**
 ```bash
 chmod +x mac-security-scan.sh
 ./mac-security-scan.sh
