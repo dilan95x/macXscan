@@ -5,7 +5,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SCAN_SCRIPT="$SCRIPT_DIR/mac-security-scan.sh"
+INSTALL_DIR="$HOME/Library/Application Support/macXscan"
+SCAN_SCRIPT="$INSTALL_DIR/mac-security-scan.sh"
 AGENT_LABEL="io.macxscan.weekly"
 AGENT_PLIST="$HOME/Library/LaunchAgents/${AGENT_LABEL}.plist"
 
@@ -14,10 +15,13 @@ echo "  macXscan installer"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# ── Step 1: Permissions ───────────────────────────────────────────────────────
+# ── Step 1: Install to stable location ───────────────────────────────────────
+mkdir -p "$INSTALL_DIR"
+cp "$SCRIPT_DIR/mac-security-scan.sh" "$SCAN_SCRIPT"
+chmod 700 "$INSTALL_DIR"
 chmod +x "$SCAN_SCRIPT"
 [[ -f "$SCRIPT_DIR/macXscan.command" ]] && chmod +x "$SCRIPT_DIR/macXscan.command"
-echo "✓ Script permissions set"
+echo "✓ Installed to ~/Library/Application Support/macXscan/"
 
 # ── Step 2: pip-audit ─────────────────────────────────────────────────────────
 if ! command -v pip-audit &>/dev/null; then

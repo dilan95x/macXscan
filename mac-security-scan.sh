@@ -142,22 +142,29 @@ fi
 # ── 5. macOS Software Updates ─────────────────────────────────────────────────
 echo "[5/10] Software updates (this may take a moment)..."
 
-SW_OUT=$(softwareupdate -l 2>/dev/null || true)
-SEC_UPDATES=$(printf '%s' "$SW_OUT" | grep -i "recommended\|security\|\*" | grep -v "^Software\|^No new" || true)
+SW_OUT=""
+SW_EXIT=0
+SW_OUT=$(softwareupdate -l 2>&1) || SW_EXIT=$?
 
-if [[ -n "$SEC_UPDATES" ]]; then
-  UPDATE_LIST=""
-  while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    UPDATE_LIST+="• $(html_escape "$line")<br>"
-  done <<< "$SEC_UPDATES"
-  add_finding "high" "macOS security updates are available" \
-    "Your Mac has security patches waiting to be installed. Keeping macOS up to date is one of the most effective ways to stay protected.<br>${UPDATE_LIST}" \
-    "" \
-    "x-apple.systempreferences:com.apple.preferences.softwareupdate"
+if [[ $SW_EXIT -ne 0 ]]; then
+  add_finding "low" "Could not check for macOS updates" \
+    "softwareupdate failed — your Mac may be offline or Apple's update service may be temporarily unavailable. Re-run the scan when you have an internet connection."
 else
-  add_finding "ok" "macOS is up to date" \
-    "No pending security updates found."
+  SEC_UPDATES=$(printf '%s' "$SW_OUT" | grep -i "recommended\|security\|\*" | grep -v "^Software\|^No new" || true)
+  if [[ -n "$SEC_UPDATES" ]]; then
+    UPDATE_LIST=""
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      UPDATE_LIST+="• $(html_escape "$line")<br>"
+    done <<< "$SEC_UPDATES"
+    add_finding "high" "macOS security updates are available" \
+      "Your Mac has security patches waiting to be installed. Keeping macOS up to date is one of the most effective ways to stay protected.<br>${UPDATE_LIST}" \
+      "" \
+      "x-apple.systempreferences:com.apple.preferences.softwareupdate"
+  else
+    add_finding "ok" "macOS is up to date" \
+      "No pending security updates found."
+  fi
 fi
 
 # ── 6. Open Ports ─────────────────────────────────────────────────────────────
@@ -212,14 +219,26 @@ fi
 # ── 8. SSH ────────────────────────────────────────────────────────────────────
 echo "[8/10] SSH access..."
 
+SSH_LOGIN_ENABLED=false
+if systemsetup -getremotelogin 2>/dev/null | grep -q "On"; then
+  SSH_LOGIN_ENABLED=true
+fi
+
 if [[ -f "$HOME/.ssh/authorized_keys" ]] && [[ -s "$HOME/.ssh/authorized_keys" ]]; then
   KEY_COUNT=$(wc -l < "$HOME/.ssh/authorized_keys" | tr -d ' ')
-  add_finding "high" "Your Mac allows remote login via saved keys (${KEY_COUNT} key(s))" \
-    "Someone with the matching private key can log into your Mac remotely over SSH without a password. Make sure these keys are yours and still needed." \
-    "Review the keys: cat ~/.ssh/authorized_keys — remove any you don't recognise"
+  if [[ "$SSH_LOGIN_ENABLED" == "true" ]]; then
+    add_finding "high" "Remote Login is on and SSH keys are stored (${KEY_COUNT} key(s))" \
+      "SSH Remote Login is enabled and your Mac has saved keys. Someone with the matching private key can log in remotely without a password. Make sure these keys are yours and still needed." \
+      "Review keys: cat ~/.ssh/authorized_keys — remove any you don't recognise" \
+      "x-apple.systempreferences:com.apple.preferences.sharing"
+  else
+    add_finding "low" "SSH keys are stored but Remote Login is off (${KEY_COUNT} key(s))" \
+      "Your Mac has saved SSH keys but Remote Login is disabled, so they cannot currently be used to access your Mac. Review them to make sure they are still needed." \
+      "Review keys: cat ~/.ssh/authorized_keys — remove any you don't recognise"
+  fi
 else
-  add_finding "ok" "No remote SSH access configured" \
-    "Your Mac cannot be logged into remotely via SSH key authentication."
+  add_finding "ok" "No SSH keys stored" \
+    "Your Mac has no saved SSH keys and cannot be accessed remotely via key authentication."
 fi
 
 if [[ -d "$HOME/.ssh" ]]; then

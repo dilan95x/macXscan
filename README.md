@@ -46,7 +46,7 @@ chmod +x mac-security-scan.sh
 
 ## Weekly auto-scan
 
-Run `bash install.sh` and choose yes when asked. macXscan will scan every Monday at 9am and open the report automatically if any issues are found.
+Run `bash install.sh` and choose yes when asked. macXscan will scan every Monday at 9am and open the report in your browser automatically.
 
 To remove the weekly scan:
 ```bash
@@ -69,8 +69,9 @@ pip install pip-audit
 - All system output is HTML-escaped before going into the report
 - `Content-Security-Policy` header in the report blocks any injected scripts
 - PATH is restricted to known-safe system directories
-- No network calls — everything runs locally
-- No data is sent anywhere
+- The macOS update check (`softwareupdate -l`) contacts Apple's update servers to fetch available update metadata — no scan results or personal data are sent
+- All other checks run entirely locally with no network calls
+- No scan data is sent anywhere
 
 ## Requirements
 
