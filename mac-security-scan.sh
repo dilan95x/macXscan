@@ -82,7 +82,9 @@ run_cleanup() {
   echo ""
   echo "Done. Disk free after: $free_after"
 
-  local cleanup_report; cleanup_report=$(mktemp /tmp/mac-cleanup-XXXXXX.html)
+  # BSD mktemp only randomizes trailing Xs, so create then rename to add .html
+  local cleanup_report; cleanup_report=$(mktemp /tmp/mac-cleanup-XXXXXX)
+  mv "$cleanup_report" "$cleanup_report.html"; cleanup_report+=".html"
   chmod 600 "$cleanup_report"
   cat > "$cleanup_report" <<HTMLEOF
 <!doctype html>
@@ -152,7 +154,9 @@ unset _pybin
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
 REPORT_DATE=$(date '+%Y-%m-%d %H:%M:%S')
-REPORT_FILE=$(mktemp /tmp/mac-security-XXXXXX.html)
+# BSD mktemp only randomizes trailing Xs, so create then rename to add .html
+REPORT_FILE=$(mktemp /tmp/mac-security-XXXXXX)
+mv "$REPORT_FILE" "$REPORT_FILE.html"; REPORT_FILE+=".html"
 chmod 600 "$REPORT_FILE"
 
 MACHINE_NAME=$(scutil --get ComputerName 2>/dev/null || hostname)
