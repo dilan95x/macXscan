@@ -1,9 +1,78 @@
 #!/usr/bin/env bash
 # mac-security-scan.sh — macXscan v2
-# Usage: ./mac-security-scan.sh  (or double-click macXscan.command)
+# Usage: ./mac-security-scan.sh            security scan (read-only)
+#        ./mac-security-scan.sh --cleanup  free disk space (interactive, whitelisted caches only)
 
 set -euo pipefail
 umask 077
+
+# ── Cleanup mode ──────────────────────────────────────────────────────────────
+# Transparency & safety rules:
+#   • Only paths on the hardcoded whitelist below are ever touched — all are
+#     regenerable caches under $HOME. No sudo, no system files, no user data.
+#   • Every eligible path is listed with its exact location and size BEFORE
+#     any deletion, and nothing is removed without an explicit "y".
+#   • Each deletion is printed as it happens; disk free is shown before/after.
+run_cleanup() {
+  # "path|what it is" — every entry must be a regenerable cache under $HOME
+  local whitelist=(
+    "$HOME/.npm/_cacache|npm package cache (re-downloads on demand)"
+    "$HOME/.npm/_npx|npx temporary package installs"
+    "$HOME/Library/Caches/Yarn|Yarn package cache (re-downloads on demand)"
+    "$HOME/Library/Caches/pip|pip package cache (re-downloads on demand)"
+    "$HOME/Library/Caches/Homebrew|Homebrew download cache (re-downloads on demand)"
+    "$HOME/Library/Caches/typescript|TypeScript server cache (rebuilds automatically)"
+    "$HOME/Library/Caches/node-gyp|node-gyp build cache (rebuilds automatically)"
+  )
+
+  echo "macXscan cleanup — regenerable developer caches only"
+  echo "Disk free before: $(df -h "$HOME" | awk 'NR==2 {print $4}')"
+  echo ""
+
+  local candidates=() sizes=() total_kb=0
+  local entry path desc kb
+  for entry in "${whitelist[@]}"; do
+    path="${entry%%|*}"; desc="${entry#*|}"
+    [[ -d "$path" ]] || continue
+    kb=$(du -sk "$path" 2>/dev/null | awk '{print $1}')
+    [[ "${kb:-0}" -lt 1024 ]] && continue   # skip anything under 1 MB
+    candidates+=("$path|$desc")
+    sizes+=("$kb")
+    (( total_kb += kb ))
+    printf '  %-8s %s\n' "$(du -sh "$path" 2>/dev/null | awk '{print $1}')" "$path"
+    printf '           %s\n' "$desc"
+  done
+
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    echo "Nothing to clean — all whitelisted caches are already small or absent."
+    return 0
+  fi
+
+  echo ""
+  printf 'Total reclaimable: ~%.1f GB across %d location(s).\n' \
+    "$(echo "$total_kb" | awk '{print $1/1048576}')" "${#candidates[@]}"
+  echo "Only the paths listed above will be deleted. They rebuild automatically when needed."
+  printf 'Delete them? [y/N] '
+  local answer; read -r answer
+  if [[ "$answer" != "y" && "$answer" != "Y" ]]; then
+    echo "Aborted — nothing was deleted."
+    return 0
+  fi
+
+  for entry in "${candidates[@]}"; do
+    path="${entry%%|*}"
+    echo "Deleting: $path"
+    rm -rf -- "$path"
+  done
+
+  echo ""
+  echo "Done. Disk free after: $(df -h "$HOME" | awk 'NR==2 {print $4}')"
+}
+
+if [[ "${1:-}" == "--cleanup" ]]; then
+  run_cleanup
+  exit 0
+fi
 
 # Add all Python framework bin dirs so pip-audit is findable regardless of version
 for _pybin in /Library/Frameworks/Python.framework/Versions/*/bin; do
