@@ -29,17 +29,19 @@ run_cleanup() {
   echo "Disk free before: $(df -h "$HOME" | awk 'NR==2 {print $4}')"
   echo ""
 
-  local candidates=() sizes=() total_kb=0
-  local entry path desc kb
+  local candidates=() human_sizes=() total_kb=0
+  local entry path desc kb hsize
+  local free_before; free_before=$(df -h "$HOME" | awk 'NR==2 {print $4}')
   for entry in "${whitelist[@]}"; do
     path="${entry%%|*}"; desc="${entry#*|}"
     [[ -d "$path" ]] || continue
     kb=$(du -sk "$path" 2>/dev/null | awk '{print $1}')
     [[ "${kb:-0}" -lt 1024 ]] && continue   # skip anything under 1 MB
+    hsize=$(du -sh "$path" 2>/dev/null | awk '{print $1}')
     candidates+=("$path|$desc")
-    sizes+=("$kb")
+    human_sizes+=("$hsize")
     (( total_kb += kb ))
-    printf '  %-8s %s\n' "$(du -sh "$path" 2>/dev/null | awk '{print $1}')" "$path"
+    printf '  %-8s %s\n' "$hsize" "$path"
     printf '           %s\n' "$desc"
   done
 
@@ -59,20 +61,88 @@ run_cleanup() {
     return 0
   fi
 
+  local items_html="" i=0
   for entry in "${candidates[@]}"; do
-    path="${entry%%|*}"
+    path="${entry%%|*}"; desc="${entry#*|}"
     echo "Deleting: $path"
     rm -rf -- "$path"
+    items_html+="<div class=\"item\">
+      <span class=\"badge ok\">FREED</span>
+      <div class=\"item-content\">
+        <div class=\"title\">$(html_escape "$path")</div>
+        <div class=\"desc\">$(html_escape "$desc")</div>
+      </div>
+      <span class=\"size\">${human_sizes[$i]}</span>
+    </div>"
+    (( i++ )) || true
   done
 
+  local free_after; free_after=$(df -h "$HOME" | awk 'NR==2 {print $4}')
+  local total_gb; total_gb=$(echo "$total_kb" | awk '{printf "%.1f", $1/1048576}')
   echo ""
-  echo "Done. Disk free after: $(df -h "$HOME" | awk 'NR==2 {print $4}')"
-}
+  echo "Done. Disk free after: $free_after"
 
-if [[ "${1:-}" == "--cleanup" ]]; then
-  run_cleanup
-  exit 0
-fi
+  local cleanup_report; cleanup_report=$(mktemp /tmp/mac-cleanup-XXXXXX.html)
+  chmod 600 "$cleanup_report"
+  cat > "$cleanup_report" <<HTMLEOF
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
+<title>macXscan Cleanup Report</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f1117; color: #e2e8f0; line-height: 1.6; padding: 2rem 1rem; }
+  .container { max-width: 860px; margin: 0 auto; }
+  .header { margin-bottom: 2rem; }
+  .header h1 { font-size: 1.6rem; font-weight: 700; }
+  .header h1 span { color: #3b82f6; }
+  .subtitle { color: #64748b; font-size: 0.875rem; margin-top: 0.25rem; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+  .stat-card { background: #1e2130; border-radius: 10px; padding: 1.1rem 1.25rem; border-left: 4px solid; }
+  .stat-card.green { border-color: #22c55e; }
+  .stat-card.blue  { border-color: #3b82f6; }
+  .stat-card .label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat-card .value { font-size: 2rem; font-weight: 700; margin-top: 0.1rem; }
+  .stat-card.green .value { color: #4ade80; }
+  .stat-card.blue .value  { color: #60a5fa; }
+  h2 { font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.75rem; border-bottom: 1px solid #1e2130; padding-bottom: 0.4rem; }
+  .item { background: #1e2130; border-radius: 8px; padding: 1rem 1.1rem; margin-bottom: 0.5rem; display: flex; align-items: flex-start; gap: 0.75rem; }
+  .badge { flex-shrink: 0; font-size: 0.65rem; font-weight: 700; padding: 0.2rem 0.45rem; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.2rem; background: #14532d; color: #86efac; }
+  .item-content { flex: 1; min-width: 0; }
+  .item-content .title { font-weight: 600; font-size: 0.9rem; font-family: "SF Mono", monospace; word-break: break-all; }
+  .item-content .desc  { color: #94a3b8; font-size: 0.85rem; margin-top: 0.25rem; }
+  .size { flex-shrink: 0; font-weight: 700; color: #4ade80; font-size: 1rem; margin-top: 0.1rem; }
+  footer { margin-top: 3rem; color: #334155; font-size: 0.78rem; text-align: center; border-top: 1px solid #1e2130; padding-top: 1.5rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>mac<span>X</span>scan · Cleanup</h1>
+    <p class="subtitle">Host: <strong>$(html_escape "$(scutil --get ComputerName 2>/dev/null || hostname)")</strong> &nbsp;·&nbsp; $(date '+%Y-%m-%d %H:%M:%S')</p>
+  </div>
+
+  <div class="summary-grid">
+    <div class="stat-card green"><div class="label">Space freed</div><div class="value">${total_gb} GB</div></div>
+    <div class="stat-card blue"> <div class="label">Locations</div>  <div class="value">${#candidates[@]}</div></div>
+    <div class="stat-card blue"> <div class="label">Free before</div><div class="value">${free_before}</div></div>
+    <div class="stat-card green"><div class="label">Free after</div> <div class="value">${free_after}</div></div>
+  </div>
+
+  <section><h2>What was removed</h2>${items_html}</section>
+
+  <footer>macXscan cleanup &nbsp;·&nbsp; Only regenerable caches were removed — they rebuild automatically when needed. &nbsp;·&nbsp; This report is deleted from disk automatically after viewing.</footer>
+</div>
+</body>
+</html>
+HTMLEOF
+
+  open "$cleanup_report" 2>/dev/null
+  ( sleep 10 && rm -f "$cleanup_report" ) &
+}
 
 # Add all Python framework bin dirs so pip-audit is findable regardless of version
 for _pybin in /Library/Frameworks/Python.framework/Versions/*/bin; do
@@ -144,6 +214,11 @@ add_finding() {
     ok)       F_OK+="$block"       ;;
   esac
 }
+
+if [[ "${1:-}" == "--cleanup" ]]; then
+  run_cleanup
+  exit 0
+fi
 
 build_section() {
   local heading="$1" content="$2"
